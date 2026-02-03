@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════
-// COMPONENTE: GESTIÓN DE ÓRDENES COMPLETO
+// COMPONENTE: GESTIÓN DE ÓRDENES CORREGIDO
 // ══════════════════════════════════════════════════════════════════
 
 const VistaOrdenes = ({ usuario, centro, onVolver }) => {
@@ -17,11 +17,12 @@ const VistaOrdenes = ({ usuario, centro, onVolver }) => {
         setCargando(true);
         google.script.run
             .withSuccessHandler((data) => {
+                console.log('Órdenes recibidas:', data);
                 setOrdenes(data || []);
                 setCargando(false);
             })
             .withFailureHandler((e) => {
-                console.error('Error:', e);
+                console.error('Error cargando órdenes:', e);
                 setCargando(false);
             })
             .getPendingTasks(centro);
@@ -95,12 +96,22 @@ const VistaOrdenes = ({ usuario, centro, onVolver }) => {
     };
     
     const getColorPrioridad = (prioridad) => {
-        switch (prioridad) {
-            case 'Crítica': return 'bg-red-600';
-            case 'Alta': return 'bg-orange-600';
-            case 'Media': return 'bg-yellow-600';
-            default: return 'bg-blue-600';
+        if (!prioridad) return 'bg-blue-600';
+        const p = prioridad.toLowerCase();
+        if (p.includes('crítica') || p.includes('critica')) return 'bg-red-600';
+        if (p.includes('alta')) return 'bg-orange-600';
+        if (p.includes('media')) return 'bg-yellow-600';
+        return 'bg-blue-600';
+    };
+    
+    // Función auxiliar para obtener valor de forma segura
+    const getValor = (obj, ...keys) => {
+        for (const key of keys) {
+            if (obj && obj[key] !== undefined && obj[key] !== null) {
+                return obj[key];
+            }
         }
+        return '';
     };
     
     return (
@@ -139,7 +150,10 @@ const VistaOrdenes = ({ usuario, centro, onVolver }) => {
                     </div>
                     <div className="card text-center bg-gradient-to-br from-red-900/50 to-orange-900/50">
                         <p className="text-3xl font-bold text-red-400">
-                            {ordenes.filter(o => o.Prioridad === 'Crítica' || o.Prioridad === 'Alta').length}
+                            {ordenes.filter(o => {
+                                const p = getValor(o, 'Prioridad', 'prioridad');
+                                return p && (p.toLowerCase().includes('crítica') || p.toLowerCase().includes('alta'));
+                            }).length}
                         </p>
                         <p className="text-sm text-slate-400 mt-1">Urgentes</p>
                     </div>
@@ -156,38 +170,63 @@ const VistaOrdenes = ({ usuario, centro, onVolver }) => {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {ordenes.map((orden, idx) => (
-                            <div key={idx} className="card">
-                                <div className="flex items-start justify-between mb-3">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold text-white ${getColorPrioridad(orden.Prioridad)}`}>
-                                                {orden.Prioridad || 'Media'}
-                                            </span>
-                                            <span className="text-xs text-slate-400">
-                                                #{orden.ID}
-                                            </span>
+                        {ordenes.map((orden, idx) => {
+                            const id = getValor(orden, 'ID', 'id', 'Id');
+                            const ordenTexto = getValor(orden, 'Orden', 'orden', 'Tarea', 'tarea');
+                            const prioridad = getValor(orden, 'Prioridad', 'prioridad') || 'Media';
+                            const fechaApertura = getValor(orden, 'Fecha Apertura', 'Fecha_Apertura', 'fecha_apertura', 'FechaApertura');
+                            const operarioApertura = getValor(orden, 'Operario Apertura', 'Operario_Apertura', 'operario_apertura', 'OperarioApertura');
+                            
+                            return (
+                                <div key={idx} className="card">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                <span className={`px-2 py-1 rounded text-xs font-bold text-white ${getColorPrioridad(prioridad)}`}>
+                                                    {prioridad}
+                                                </span>
+                                                {id && (
+                                                    <span className="text-xs text-slate-400">
+                                                        #{id}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h4 className="text-white font-bold mb-2">
+                                                {ordenTexto || 'Sin descripción'}
+                                            </h4>
+                                            {fechaApertura && (
+                                                <p className="text-sm text-slate-400 mb-1">
+                                                    📅 {fechaApertura}
+                                                </p>
+                                            )}
+                                            {operarioApertura && (
+                                                <p className="text-sm text-slate-400">
+                                                    👤 {operarioApertura}
+                                                </p>
+                                            )}
                                         </div>
-                                        <h4 className="text-white font-bold mb-2">{orden.Orden}</h4>
-                                        <p className="text-sm text-slate-400 mb-1">
-                                            📅 {orden['Fecha Apertura']}
-                                        </p>
-                                        <p className="text-sm text-slate-400">
-                                            👤 {orden['Operario Apertura']}
-                                        </p>
                                     </div>
+                                    
+                                    <button
+                                        onClick={() => setCompletarOrden({ id: id, nota: '' })}
+                                        className="w-full btn btn-success text-sm"
+                                    >
+                                        ✓ Completar
+                                    </button>
                                 </div>
-                                
-                                <button
-                                    onClick={() => setCompletarOrden({ id: orden.ID, nota: '' })}
-                                    className="w-full btn btn-success text-sm"
-                                >
-                                    ✓ Completar
-                                </button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
+                
+                {/* Botón refrescar */}
+                <button
+                    onClick={cargarOrdenes}
+                    className="w-full btn btn-secondary"
+                    disabled={cargando}
+                >
+                    🔄 Actualizar
+                </button>
             </div>
             
             {/* Modal nueva orden */}
@@ -206,6 +245,7 @@ const VistaOrdenes = ({ usuario, centro, onVolver }) => {
                                 onChange={(e) => setNuevaOrden({...nuevaOrden, tarea: e.target.value})}
                                 placeholder="Describe la tarea..."
                                 rows="3"
+                                autoFocus
                             />
                         </div>
                         
@@ -248,6 +288,7 @@ const VistaOrdenes = ({ usuario, centro, onVolver }) => {
                                 onChange={(e) => setCompletarOrden({...completarOrden, nota: e.target.value})}
                                 placeholder="Describe lo que se hizo..."
                                 rows="3"
+                                autoFocus
                             />
                         </div>
                         
